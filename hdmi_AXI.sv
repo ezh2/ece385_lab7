@@ -104,11 +104,14 @@ module hdmi_text_controller_v1_0_AXI #
     
     input  logic [9:0]  vram_addr,
     output logic [31:0] vram_data,
-    output logic [31:0] color_data
+    output logic [31:0] color,
+    input logic  [31:0] framecount,
+    input logic  [9:0] drawX,
+    input logic  [9:0] drawY
 );
 
 assign vram_data = slv_regs[vram_addr];
-assign color_data = slv_regs[600];
+assign color = slv_regs[600];
 
 // AXI4LITE signals
 logic  [C_S_AXI_ADDR_WIDTH-1 : 0] 	axi_awaddr;
@@ -239,7 +242,7 @@ begin
           axi_wready <= 1'b0;
         end
     end 
-end       
+end   
 
 // Implement memory mapped register select and write logic generation
 // The write data is accepted and written to memory mapped registers when
@@ -373,7 +376,22 @@ assign slv_reg_rden = axi_arready & S_AXI_ARVALID & ~axi_rvalid;
 always_comb
 begin
       // Address decoding for reading registers
-     reg_data_out = slv_regs[axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]];
+      if (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]==10'h259) //framecounter @@@
+      begin
+        reg_data_out = framecount;
+      end
+      else if (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]==10'h25A) //current drawX @@@
+      begin
+        reg_data_out = drawX;
+      end
+      else if (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]==10'h25B) //current drawY @@@
+      begin
+        reg_data_out = drawY;
+      end
+      else
+      begin
+        reg_data_out = slv_regs[axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]];
+      end
 end
 
 // Output register or memory read data
