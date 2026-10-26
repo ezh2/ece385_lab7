@@ -98,7 +98,10 @@ hdmi_text_controller_v1_0_AXI # (
 ) hdmi_text_controller_v1_0_AXI_inst (
     .vram_addr(word_ind),
     .vram_data(vram),
-    .color_data(color),
+    .color(color),
+    .framecount(framecount),
+    .drawX(drawX),
+    .drawY(drawY),
     .S_AXI_ACLK(axi_aclk),
     .S_AXI_ARESETN(axi_aresetn),
     .S_AXI_AWADDR(axi_awaddr),
@@ -182,6 +185,24 @@ always_comb begin
         blue  = color[19:16];
     end
 end
+
+logic [31:0] framecount;
+logic vsync_old;
+always_ff @(posedge clk_125MHz or posedge reset_ah)
+begin
+    if (reset_ah)
+    begin
+        framecount <= 0;
+    end
+    else
+    begin
+        vsync_old <= vsync;
+        if (vsync_old && !vsync)
+        begin
+            framecount <= framecount + 1;
+        end
+    end
+end    
 //color_mapper color_instance(
 //        .BallX(0),
 //        .BallY(0),
