@@ -62,9 +62,33 @@ logic reset_ah;
     
 assign reset_ah = ~axi_aresetn;
 
-//assign red   = drawY[8:5];
-//assign green = drawY[8:5];
-//assign blue  = drawY[8:5];
+
+logic [10:0] font_addr;
+logic [7:0] font_data;
+logic [7:0] character_code;
+logic [1:0] byte_ind;
+logic [9:0] word_ind;
+logic [11:0] char_ind;
+logic [31:0] vram;
+logic [31:0] color;
+
+assign char_ind = (drawY/16)*80+(drawX/8);
+assign word_ind = char_ind/4;
+assign byte_ind = char_ind[1:0];
+
+always_comb begin
+    case (byte_ind)
+        2'd0: character_code = vram [7:0];
+        2'd1: character_code = vram [15:8];
+        2'd2: character_code = vram [23:16];
+        2'd3: character_code = vram [31:24];
+        default: character_code = 8'b0;
+    endcase
+end
+logic font_pix;
+assign font_addr = {character_code[6:0], drawY[3:0]};
+//assign font_addr = {7'd65, drawY[3:0]};
+assign font_pix = font_data[7-drawX[2:0]];
 
 
 // Instantiation of Axi Bus Interface AXI
@@ -72,6 +96,9 @@ hdmi_text_controller_v1_0_AXI # (
     .C_S_AXI_DATA_WIDTH(C_AXI_DATA_WIDTH),
     .C_S_AXI_ADDR_WIDTH(C_AXI_ADDR_WIDTH)
 ) hdmi_text_controller_v1_0_AXI_inst (
+    .vram_addr(word_ind),
+    .vram_data(vram),
+    .color_data(color),
     .S_AXI_ACLK(axi_aclk),
     .S_AXI_ARESETN(axi_aresetn),
     .S_AXI_AWADDR(axi_awaddr),
@@ -136,17 +163,39 @@ hdmi_tx_0 vga_to_hdmi (
         .TMDS_DATA_P(hdmi_tx_p),
         .TMDS_DATA_N(hdmi_tx_n)         
     );
+logic pixel;
 
-color_mapper color_instance(
-        .BallX(0),
-        .BallY(0),
-        .DrawX(drawX),
-        .DrawY(drawY),
-        .Ball_size(0),
-        .Red(red),
-        .Green(green),
-        .Blue(blue)
-    );
+assign pixel=font_pix^character_code[7];
+
+always_comb begin
+    if (!pixel) 
+    begin
+        red   = color[11:8];
+        green = color[7:4];
+        blue  = color[3:0];
+    end
+    
+    else 
+    begin
+        red   = color[27:24];
+        green = color[23:20];
+        blue  = color[19:16];
+    end
+end
+//color_mapper color_instance(
+//        .BallX(0),
+//        .BallY(0),
+//        .DrawX(drawX),
+//        .DrawY(drawY),
+//        .Ball_size(0),
+//        .Red(red),
+//        .Green(green),
+//        .Blue(blue)
+//    );
+font_rom font_rom_inst (
+    .addr(font_addr),
+    .data(font_data)
+);
 
 //Instiante clocking wizard, VGA sync generator modules, and VGA-HDMI IP here. For a hint, refer to the provided
 //top-level from the previous lab. You should get the IP to generate a valid HDMI signal (e.g. blue screen or gradient)
