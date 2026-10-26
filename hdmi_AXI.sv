@@ -1,301 +1,403 @@
-//HDMI Text Controller Example Testbench for ECE 385
-//Spring 2026 Distribution
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: ECE-Illinois
+// Engineer: Zuofu Cheng
+// 
+// Create Date: 06/08/2023 12:21:05 PM
+// Design Name: 
+// Module Name: hdmi_text_controller_v1_0_AXI
+// Project Name: ECE 385 - hdmi_text_controller
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// This is a modified version of the Vivado template for an AXI4-Lite peripheral,
+// rewritten into SystemVerilog for use with ECE 385.
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.02 - File modified to be more consistent with generated template
+// Revision 11/18 - Made comments less confusing
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
 
-//Modified 3/29/26 by Zuofu
-//
-//Based on Realdigital documentation on simulating AXI Bus
-//as well as BMP writing code from @BrianHGinc
-//
-//Used for simulation of AXI4-Lite bus as well as generating
-//simulation video image for testing
 
-//`define SIM_VIDEO //Comment out to simulate AXI bus only
-                    //Uncomment to simulate entire screen and write BMP (slow)
+`timescale 1 ns / 1 ps
 
-module hdmi_text_controller_tb();
+module hdmi_text_controller_v1_0_AXI #
+(
 
-	//clock and reset_n signals
-	logic aclk =1'b0;
-	logic arstn = 1'b0;
-	
-	//Write Address channel (AW)
-	logic [31:0] write_addr =32'd0;	//Master write address
-	logic [2:0] write_prot = 3'd0;	//type of write(leave at 0)
-	logic write_addr_valid = 1'b0;	//master indicating address is valid
-	logic write_addr_ready;		    //slave ready to receive address
+    // Parameters of Axi Slave Bus Interface S_AXI
+    // Modify parameters as necessary for access of full VRAM range
 
-	//Write Data Channel (W)
-	logic [31:0] write_data = 32'd0;	//Master write data
-	logic [3:0] write_strb = 4'd0;	    //Master byte-wise write strobe
-	logic write_data_valid = 1'b0;	    //Master indicating write data is valid
-	logic write_data_ready;		        //slave ready to receive data
+    // Width of S_AXI data bus
+    parameter integer C_S_AXI_DATA_WIDTH	= 32,
+    // Width of S_AXI address bus
+    parameter integer C_S_AXI_ADDR_WIDTH	= 16
+)
+(
+    // Users to add ports here
 
-	//Write Response Channel (WR)
-	logic write_resp_ready = 1'b0;	//Master ready to receive write response
-	logic [1:0] write_resp;		    //slave write response
-	logic write_resp_valid;		    //slave response valid
-	
-	//Read Address channel (AR)
-	logic [31:0] read_addr = 32'd0;	//Master read address
-	logic [2:0] read_prot =3'd0;	//type of read(leave at 0)
-	logic read_addr_valid = 1'b0;	//Master indicating address is valid
-	logic read_addr_ready;		    //slave ready to receive address
+    // User ports ends
 
-	//Read Data Channel (R)
-	logic read_data_ready = 1'b0;	//Master indicating ready to receive data
-	logic [31:0] read_data;		    //slave read data
-	logic [1:0] read_resp;		    //slave read response
-	logic read_data_valid;		    //slave indicating data in channel is valid
-
-    //Although we can look at the HDMI signal, it is not particularly useful for debugging
-    //Instead, simulate and record the pixel clock and the pixel RGB values to generate
-    //a simulated image
-    logic [3:0] pixel_rgb [3];
-    logic pixel_clk, pixel_hs, pixel_vs, pixel_vde;
-    logic [9:0] drawX, drawY;
-    logic [31:0] tb_read;
+    // Global Clock Signal
+    input logic  S_AXI_ACLK,
+    // Global Reset Signal. This Signal is Active LOW
+    input logic  S_AXI_ARESETN,
+    // Write address (issued by master, acceped by Slave)
+    input logic [C_S_AXI_ADDR_WIDTH-1 : 0] S_AXI_AWADDR,
+    // Write channel Protection type. This signal indicates the
+        // privilege and security level of the transaction, and whether
+        // the transaction is a data access or an instruction access.
+    input logic [2 : 0] S_AXI_AWPROT,
+    // Write address valid. This signal indicates that the master signaling
+        // valid write address and control information.
+    input logic  S_AXI_AWVALID,
+    // Write address ready. This signal indicates that the slave is ready
+        // to accept an address and associated control signals.
+    output logic  S_AXI_AWREADY,
+    // Write data (issued by master, acceped by Slave) 
+    input logic [C_S_AXI_DATA_WIDTH-1 : 0] S_AXI_WDATA,
+    // Write strobes. This signal indicates which byte lanes hold
+        // valid data. There is one write strobe bit for each eight
+        // bits of the write data bus.    
+    input logic [(C_S_AXI_DATA_WIDTH/8)-1 : 0] S_AXI_WSTRB,
+    // Write valid. This signal indicates that valid write
+        // data and strobes are available.
+    input logic  S_AXI_WVALID,
+    // Write ready. This signal indicates that the slave
+        // can accept the write data.
+    output logic  S_AXI_WREADY,
+    // Write response. This signal indicates the status
+        // of the write transaction.
+    output logic [1 : 0] S_AXI_BRESP,
+    // Write response valid. This signal indicates that the channel
+        // is signaling a valid write response.
+    output logic  S_AXI_BVALID,
+    // Response ready. This signal indicates that the master
+        // can accept a write response.
+    input logic  S_AXI_BREADY,
+    // Read address (issued by master, acceped by Slave)
+    input logic [C_S_AXI_ADDR_WIDTH-1 : 0] S_AXI_ARADDR,
+    // Protection type. This signal indicates the privilege
+        // and security level of the transaction, and whether the
+        // transaction is a data access or an instruction access.
+    input logic [2 : 0] S_AXI_ARPROT,
+    // Read address valid. This signal indicates that the channel
+        // is signaling valid read address and control information.
+    input logic  S_AXI_ARVALID,
+    // Read address ready. This signal indicates that the slave is
+        // ready to accept an address and associated control signals.
+    output logic  S_AXI_ARREADY,
+    // Read data (issued by slave)
+    output logic [C_S_AXI_DATA_WIDTH-1 : 0] S_AXI_RDATA,
+    // Read response. This signal indicates the status of the
+        // read transfer.
+    output logic [1 : 0] S_AXI_RRESP,
+    // Read valid. This signal indicates that the channel is
+        // signaling the required read data.
+    output logic  S_AXI_RVALID,
+    // Read ready. This signal indicates that the master can
+        // accept the read data and response information.
+    input logic  S_AXI_RREADY,
     
-    //BMP writer related signals    
-    localparam BMP_WIDTH  = 800;
-    localparam BMP_HEIGHT = 525;
-    logic [23:0] bitmap [BMP_WIDTH][BMP_HEIGHT];
+    input  logic [9:0]  vram_addr,
+    output logic [31:0] vram_data,
+    output logic [31:0] color_data
+);
 
-    integer i,j; //use integers for loop indices, etc
+assign vram_data = slv_regs[vram_addr];
+assign color_data = slv_regs[600];
 
-	//Instantiation of DUT (HDMI TEXT_CONTROLLER) IP
-	hdmi_text_controller_v1_0 # (
-		.C_AXI_DATA_WIDTH(32),
-		.C_AXI_ADDR_WIDTH(16)
-	) hdmi_text_controller_v1_0_inst (
+// AXI4LITE signals
+logic  [C_S_AXI_ADDR_WIDTH-1 : 0] 	axi_awaddr;
+logic  axi_awready;
+logic  axi_wready;
+logic  [1 : 0] 	axi_bresp;
+logic  axi_bvalid;
+logic  [C_S_AXI_ADDR_WIDTH-1 : 0] 	axi_araddr;
+logic  axi_arready;
+logic  [C_S_AXI_DATA_WIDTH-1 : 0] 	axi_rdata;
+logic  [1 : 0] 	axi_rresp;
+logic  	axi_rvalid;
 
-		.axi_aclk(aclk),
-		.axi_aresetn(arstn),
+// Example-specific design signals
+// local parameter for addressing 32 bit / 64 bit C_S_AXI_DATA_WIDTH
+// ADDR_LSB is used for addressing 32/64 bit registers/memories
+// ADDR_LSB = 2 for 32 bits (n downto 2)
+// ADDR_LSB = 3 for 64 bits (n downto 3)
+localparam integer ADDR_LSB = (C_S_AXI_DATA_WIDTH/32) + 1;
+localparam integer OPT_MEM_ADDR_BITS = 9;
+//----------------------------------------------
+//-- Signals for user logic register space example
+//------------------------------------------------
+//-- Number of Slave Registers 4
+//logic [C_S_AXI_DATA_WIDTH-1:0]	slv_reg0;
+//logic [C_S_AXI_DATA_WIDTH-1:0]	slv_reg1;
+//logic [C_S_AXI_DATA_WIDTH-1:0]	slv_reg2;
+//logic [C_S_AXI_DATA_WIDTH-1:0]	slv_reg3;
+//
+//Note: the provided Verilog template had the registered declared as above, but in order to give 
+//students a hint we have replaced the 4 individual registers with an unpacked array of packed logic. 
+//Note that you as the student will still need to extend this to the full register set needed for the lab.
+logic [C_S_AXI_DATA_WIDTH-1:0] slv_regs[604];
+logic	 slv_reg_rden;
+logic	 slv_reg_wren;
+logic [C_S_AXI_DATA_WIDTH-1:0]	 reg_data_out;
+integer	 byte_index;
+logic	 aw_en;
 
-		.axi_awaddr(write_addr),
-		.axi_awprot(write_prot),
-		.axi_awvalid(write_addr_valid),
-		.axi_awready(write_addr_ready),
+// I/O Connections assignments
 
-		.axi_wdata(write_data),
-		.axi_wstrb(write_strb),
-		.axi_wvalid(write_data_valid),
-		.axi_wready(write_data_ready),
+assign S_AXI_AWREADY	= axi_awready;
+assign S_AXI_WREADY	= axi_wready;
+assign S_AXI_BRESP	= axi_bresp;
+assign S_AXI_BVALID	= axi_bvalid;
+assign S_AXI_ARREADY = axi_arready;
+assign S_AXI_RDATA	= axi_rdata;
+assign S_AXI_RRESP	= axi_rresp;
+assign S_AXI_RVALID	= axi_rvalid;
+// Implement axi_awready generation
+// axi_awready is asserted for one S_AXI_ACLK clock cycle when both
+// S_AXI_AWVALID and S_AXI_WVALID are asserted. axi_awready is
+// de-asserted when reset is low.
 
-		.axi_bresp(write_resp),
-		.axi_bvalid(write_resp_valid),
-		.axi_bready(write_resp_ready),
-
-		.axi_araddr(read_addr),
-		.axi_arprot(read_prot),
-		.axi_arvalid(read_addr_valid),
-		.axi_arready(read_addr_ready),
-
-		.axi_rdata(read_data),
-		.axi_rresp(read_resp),
-		.axi_rvalid(read_data_valid),
-		.axi_rready(read_data_ready)
-	);
-	
-	initial begin: CLOCK_INITIALIZATION
-	   aclk = 1'b1;
+always_ff @( posedge S_AXI_ACLK )
+begin
+  if ( S_AXI_ARESETN == 1'b0 )
+    begin
+      axi_awready <= 1'b0;
+      aw_en <= 1'b1;
     end 
-       
-    always begin : CLOCK_GENERATION
-        #5 aclk = ~aclk;
+  else
+    begin    
+      if (~axi_awready && S_AXI_AWVALID && S_AXI_WVALID && aw_en)
+        begin
+          // slave is ready to accept write address when 
+          // there is a valid write address and write data
+          // on the write address and data bus. This design 
+          // expects no outstanding transactions. 
+          axi_awready <= 1'b1;
+          aw_en <= 1'b0;
+        end
+        else if (S_AXI_BREADY && axi_bvalid)
+            begin
+              aw_en <= 1'b1;
+              axi_awready <= 1'b0;
+            end
+      else           
+        begin
+          axi_awready <= 1'b0;
+        end
+    end 
+end       
+
+// Implement axi_awaddr latching
+// This process is used to latch the address when both 
+// S_AXI_AWVALID and S_AXI_WVALID are valid. 
+
+always_ff @( posedge S_AXI_ACLK )
+begin
+  if ( S_AXI_ARESETN == 1'b0 )
+    begin
+      axi_awaddr <= 0;
+    end 
+  else
+    begin    
+      if (~axi_awready && S_AXI_AWVALID && S_AXI_WVALID && aw_en)
+        begin
+          // Write Address latching 
+          axi_awaddr <= S_AXI_AWADDR;
+        end
+    end 
+end       
+
+// Implement axi_wready generation
+// axi_wready is asserted for one S_AXI_ACLK clock cycle when both
+// S_AXI_AWVALID and S_AXI_WVALID are asserted. axi_wready is 
+// de-asserted when reset is low. 
+
+always_ff @( posedge S_AXI_ACLK )
+begin
+  if ( S_AXI_ARESETN == 1'b0 )
+    begin
+      axi_wready <= 1'b0;
+    end 
+  else
+    begin    
+      if (~axi_wready && S_AXI_WVALID && S_AXI_AWVALID && aw_en )
+        begin
+          // slave is ready to accept write data when 
+          // there is a valid write address and write data
+          // on the write address and data bus. This design 
+          // expects no outstanding transactions. 
+          axi_wready <= 1'b1;
+        end
+      else
+        begin
+          axi_wready <= 1'b0;
+        end
+    end 
+end       
+
+// Implement memory mapped register select and write logic generation
+// The write data is accepted and written to memory mapped registers when
+// axi_awready, S_AXI_WVALID, axi_wready and S_AXI_WVALID are asserted. Write strobes are used to
+// select byte enables of slave registers while writing.
+// These registers are cleared when reset (active low) is applied.
+// Slave register write enable is asserted when valid address and data are available
+// and the slave is ready to accept the write address and write data.
+assign slv_reg_wren = axi_wready && S_AXI_WVALID && axi_awready && S_AXI_AWVALID;
+
+always_ff @( posedge S_AXI_ACLK )
+begin
+  if ( S_AXI_ARESETN == 1'b0 )
+    begin
+        for (integer i = 0; i < 604; i++)
+        begin
+           slv_regs[i] <= 0;
+        end
     end
+  else begin
+    if (slv_reg_wren)
+      begin
+        for ( byte_index = 0; byte_index <= (C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
+          if ( S_AXI_WSTRB[byte_index] == 1 ) begin
+            // Respective byte enables are asserted as per write strobes, note the use of the index part select operator
+            // '+:', you will need to understand how this operator works.
+            slv_regs[axi_awaddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]][(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
+          end  
+      end
+  end
+end    
 
-    //Uncomment and fill in the following with your own hierarchical reference (e.g. internal signals) 
-    //so that the testbench can properly reflect the pixels being draw. 
-    //Note that looking at the HDMI signal is not particularly useful here, as it is difficult
-    //to decode. E.g. if your hdmi_text_controller has an internal signal named 'clk_25MHz' for
-    //the pixel clock, assign pixel_clk = hdmi_text_controller_v1_0_inst.clk_25MHz
-    
+// Implement write response logic generation
+// The write response and response valid signals are asserted by the slave 
+// when axi_wready, S_AXI_WVALID, axi_wready and S_AXI_WVALID are asserted.  
+// This marks the acceptance of address and indicates the status of 
+// write transaction.
 
-
-    // Red Green and Blue values respectively - these come from your draw logic
-     assign pixel_rgb[0] =  hdmi_text_controller_v1_0_inst.red;
-     assign pixel_rgb[1] = hdmi_text_controller_v1_0_inst.green;
-     assign pixel_rgb[2] = hdmi_text_controller_v1_0_inst.blue;
-    
-    // Pixel clock, hs, vs, and vde (!blank) - these come from your internal VGA module
-    assign pixel_clk = hdmi_text_controller_v1_0_inst.clk_25MHz;
-    assign pixel_hs  = hdmi_text_controller_v1_0_inst.hsync;
-    assign pixel_vs  = hdmi_text_controller_v1_0_inst.vsync;
-    assign pixel_vde = hdmi_text_controller_v1_0_inst.vde;
-    
-    // DrawX and DrawY - these come from your internal VGA module
-     assign drawX = hdmi_text_controller_v1_0_inst.drawX;
-     assign drawY =hdmi_text_controller_v1_0_inst.drawY;
-   
-    // BMP writing task, based off work from @BrianHGinc:
-    // https://github.com/BrianHGinc/SystemVerilog-TestBench-BPM-picture-generator
-    task save_bmp(string bmp_file_name);
+always_ff @( posedge S_AXI_ACLK )
+begin
+  if ( S_AXI_ARESETN == 1'b0 )
+    begin
+      axi_bvalid  <= 0;
+      axi_bresp   <= 2'b0;
+    end 
+  else
+    begin    
+      if (axi_awready && S_AXI_AWVALID && ~axi_bvalid && axi_wready && S_AXI_WVALID)
         begin
-        
-            integer unsigned        fout_bmp_pointer, BMP_file_size,BMP_row_size,r;
-            logic   unsigned [31:0] BMP_header[0:12];
-        
-                                      BMP_row_size  = 32'(BMP_WIDTH) & 32'hFFFC;  // When saving a bitmap, the row size/width must be
-        if ((BMP_WIDTH & 32'd3) !=0)  BMP_row_size  = BMP_row_size + 4;           // padded to chunks of 4 bytes.
-    
-        fout_bmp_pointer= $fopen(bmp_file_name,"wb");
-        if (fout_bmp_pointer==0) begin
-            $display("Could not open file '%s' for writing",bmp_file_name);
-            $stop;     
-        end
-        $display("Saving bitmap '%s'.",bmp_file_name);
-       
-        BMP_header[0:12] = '{BMP_file_size,0,0054,40,BMP_WIDTH,BMP_HEIGHT,{16'd24,16'd8},0,(BMP_row_size*BMP_HEIGHT*3),2835,2835,0,0};
-        
-        //Write header out      
-        $fwrite(fout_bmp_pointer,"BM");
-        for (int i =0 ; i <13 ; i++ ) $fwrite(fout_bmp_pointer,"%c%c%c%c",BMP_header[i][7 -:8],BMP_header[i][15 -:8],BMP_header[i][23 -:8],BMP_header[i][31 -:8]); // Better compatibility with Lattice Active_HDL.
-        
-        //Write image out (note that image is flipped in Y)
-        for (int y=BMP_HEIGHT-1;y>=0;y--) begin
-          for (int x=0;x<BMP_WIDTH;x++)
-            $fwrite(fout_bmp_pointer,"%c%c%c",bitmap[x][y][23:16],bitmap[x][y][15:8],bitmap[x][y][7:0]) ;
-        end
-    
-        $fclose(fout_bmp_pointer);
-        end
-    endtask
-    
-    // Always procedure to log RGB values into array to generate image
-    always@(posedge pixel_clk)
-        if (!arstn) begin
-            for (j = 0; j < BMP_HEIGHT; j++)    //assign bitmap default to some light gray so we 
-                for (i = 0; i < BMP_WIDTH; i++) //can tell the difference between drawn black
-                    bitmap[i][j] <= 24'h0F0F0F; //and default color
-        end
-        else
-            if (pixel_vde) //Only draw when not in the blanking interval, BMP24 is BGR format
-                bitmap[drawX][drawY] <= {pixel_rgb[2], 4'h0, pixel_rgb[1], 4'h0, pixel_rgb[0], 4'h00};
-
-    // Provided AXI write task, follow this example for AXI read below
-    task axi_write (input logic [31:0] addr, input logic [31:0] data);
+          // indicates a valid write response is available
+          axi_bvalid <= 1'b1;
+          axi_bresp  <= 2'b0; // 'OKAY' response 
+        end                   // work error responses in future
+      else
         begin
-            #3 write_addr <= addr;	//Put write address on bus
-            write_data <= data;	//put write data on bus
-            write_addr_valid <= 1'b1;	//indicate address is valid
-            write_data_valid <= 1'b1;	//indicate data is valid
-            write_resp_ready <= 1'b1;	//indicate ready for a response
-            write_strb <= 4'hF;		//writing all 4 bytes
-    
-            //wait for one slave ready signal or the other
-            wait(write_data_ready || write_addr_ready);
-                
-            @(posedge aclk); //one or both signals and a positive edge
-            if(write_data_ready&&write_addr_ready)//received both ready signals
+          if (S_AXI_BREADY && axi_bvalid) 
+            //check if bready is asserted while bvalid is high) 
+            //(there is a possibility that bready is always asserted high)   
             begin
-                write_addr_valid<=0;
-                write_data_valid<=0;
-            end
-            else    //wait for the other signal and a positive edge
-            begin
-                if(write_data_ready)    //case data handshake completed
-                begin
-                    write_data_valid<=0;
-                    wait(write_addr_ready); //wait for address address ready
-                end
-                        else if(write_addr_ready)   //case address handshake completed
-                        begin
-                    write_addr_valid<=0;
-                            wait(write_data_ready); //wait for data ready
-                        end 
-                @ (posedge aclk);// complete the second handshake
-                write_addr_valid<=0; //make sure both valid signals are deasserted
-                write_data_valid<=0;
-            end
-                
-            //both handshakes have occured
-            //deassert strobe
-            write_strb<=0;
-    
-            //wait for valid response
-            wait(write_resp_valid);
-            
-            //both handshake signals and rising edge
-            @(posedge aclk);
-    
-            //deassert ready for response
-            write_resp_ready<=0;
-    
-            //end of write transaction
+              axi_bvalid <= 1'b0; 
+            end  
         end
-    endtask;
-    
-    //Fill in this task to perform an AXI read, similar to the provided example
-    //of the AXI write above, follow the waveforms provided into the I.AMM manual
-    //Note the read handshake process is simpler than the write
-    task axi_read (input logic [31:0] addr, output logic [31:0] data);
+    end
+end   
+
+// Implement axi_arready generation
+// axi_arready is asserted for one S_AXI_ACLK clock cycle when
+// S_AXI_ARVALID is asserted. axi_awready is 
+// de-asserted when reset (active low) is asserted. 
+// The read address is also latched when S_AXI_ARVALID is 
+// asserted. axi_araddr is reset to zero on reset assertion.
+
+always_ff @( posedge S_AXI_ACLK )
+begin
+  if ( S_AXI_ARESETN == 1'b0 )
+    begin
+      axi_arready <= 1'b0;
+      axi_araddr  <= 32'b0;
+    end 
+  else
+    begin    
+      if (~axi_arready && S_AXI_ARVALID)
         begin
-            #3 read_addr <= addr;	//Put read address on bus
-            read_data <= data;	//put read data on bus
-            read_addr_valid <= 1'b1;	//indicate address is valid
-
-            //wait for slave
-            wait(read_addr_ready);    
-                
-            @(posedge aclk);
-            read_addr_valid <= 1'b0; 
-            // addr HS done
-
-            read_data_ready <= 1'b1;
-            wait(read_data_ready);    
-                
-            @(posedge aclk);
-            data = read_data; //get data
-    
-            //deassert ready for response
-            read_data_ready<=1'b0;
-    
-            //end of read transaction
-        
+          // indicates that the slave has acceped the valid read address
+          axi_arready <= 1'b1;
+          // Read address latching
+          axi_araddr  <= S_AXI_ARADDR;
         end
-    endtask;
-  
-  
-    // Initial block for test vectors begins below
-    initial begin: TEST_VECTORS
-        arstn = 0; //reset IP
-        repeat (4) @(posedge aclk);
-        arstn <= 1;
-        
-        //remember AXI addresses are BYTE addresses!
-        //This writes something into the Control Register so that we're not simulating a black screen
-        //write control reg to set foreground (x36E) and background (xE94)
-        repeat (4) @(posedge aclk) axi_write((600*4), {16'h036B,16'h0E94}); 
-        
-        //Write into every one of the 600 VRAM registers, note that this is different than what the driver C code does
-        //because the testbench axi_write task only generates aligned (full 32-bit) AXI writes (e.g. write_strb is always F)
-        //The C code on the MicroBlaze expects to be able to do byte and halfword (16-bit) writes, therefore if the
-        //simulation works but the checksum does not pass in the hardware, check handling of write_strb. 
-        for(i=0; i < 600; i++) begin 
-		  repeat (4) @(posedge aclk) axi_write(4*i, i);
+      else
+        begin
+          axi_arready <= 1'b0;
         end
-        
-        //The following is the readback routine. It tests that your AXI IP is capable of reading back all 601
-        //VRAM registers via AXI (once you've properly filled in axi_read as above). Note that the verification
-        //of the readback results is automatic, it will throw an assertion if the readback result is not as expected        
-        for(i=0; i < 600; i++) begin 
-		  repeat (4) @(posedge aclk) axi_read(4*i, tb_read);
-		  axi_read_assert:assert (tb_read == i) else $error ("AXI readback mismatch at address %x. Expected: %x. Actual:%x.", i, i, tb_read);
-        end
-        
-        repeat (4) @(posedge aclk) axi_read(600*4, tb_read);
-        $info ("Read back of control register: %x", tb_read);
-        
-        //Make sure you've set the simulation settings to run to 'all', rather than the 1000ns default
-		
-		//Simulate until VS goes low (indicating a new frame) and write the results
-		`ifdef SIM_VIDEO
-		wait (~pixel_vs);
-		save_bmp ("lab7_1_sim.bmp");
-		`endif
-		$finish();
-	end
-    
-endmodule	
+    end 
+end       
 
-	
+// Implement axi_arvalid generation
+// axi_rvalid is asserted for one S_AXI_ACLK clock cycle when both 
+// S_AXI_ARVALID and axi_arready are asserted. The slave registers 
+// data are available on the axi_rdata bus at this instance. The 
+// assertion of axi_rvalid marks the validity of read data on the 
+// bus and axi_rresp indicates the status of read transaction.axi_rvalid 
+// is deasserted on reset (active low). axi_rresp and axi_rdata are 
+// cleared to zero on reset (active low).  
+always_ff @( posedge S_AXI_ACLK )
+begin
+  if ( S_AXI_ARESETN == 1'b0 )
+    begin
+      axi_rvalid <= 0;
+      axi_rresp  <= 0;
+    end 
+  else
+    begin    
+      if (axi_arready && S_AXI_ARVALID && ~axi_rvalid)
+        begin
+          // Valid read data is available at the read data bus
+          axi_rvalid <= 1'b1;
+          axi_rresp  <= 2'b0; // 'OKAY' response
+        end   
+      else if (axi_rvalid && S_AXI_RREADY)
+        begin
+          // Read data is accepted by the master
+          axi_rvalid <= 1'b0;
+        end                
+    end
+end    
+
+// Implement memory mapped register select and read logic generation
+// Slave register read enable is asserted when valid address is available
+// and the slave is ready to accept the read address.
+assign slv_reg_rden = axi_arready & S_AXI_ARVALID & ~axi_rvalid;
+always_comb
+begin
+      // Address decoding for reading registers
+     reg_data_out = slv_regs[axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]];
+end
+
+// Output register or memory read data
+always_ff @( posedge S_AXI_ACLK )
+begin
+  if ( S_AXI_ARESETN == 1'b0 )
+    begin
+      axi_rdata  <= 0;
+    end 
+  else
+    begin    
+      // When there is a valid read address (S_AXI_ARVALID) with 
+      // acceptance of read address by the slave (axi_arready), 
+      // output the read dada 
+      if (slv_reg_rden)
+        begin
+          axi_rdata <= reg_data_out;     // register read data
+        end   
+    end
+end    
+
+// Add user logic here
+
+// User logic ends
+
+endmodule
+
