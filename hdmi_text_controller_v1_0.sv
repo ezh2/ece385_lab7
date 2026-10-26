@@ -13,7 +13,7 @@ module hdmi_text_controller_v1_0 #
     // Modify parameters as necessary for access of full VRAM range
 
     parameter integer C_AXI_DATA_WIDTH	= 32,
-    parameter integer C_AXI_ADDR_WIDTH	= 10 
+    parameter integer C_AXI_ADDR_WIDTH	= 16 
 )
 (
     // Users to add ports here
@@ -52,6 +52,20 @@ module hdmi_text_controller_v1_0 #
 );
 
 //additional logic variables as necessary to support VGA, and HDMI modules.
+logic clk_25MHz, clk_125MHz, clk, clk_100MHz;
+logic locked;
+logic [9:0] drawX, drawY, ballxsig, ballysig, ballsizesig;
+
+logic hsync, vsync, vde;
+logic [3:0] red, green, blue;
+logic reset_ah;
+    
+assign reset_ah = ~axi_aresetn;
+
+//assign red   = drawY[8:5];
+//assign green = drawY[8:5];
+//assign blue  = drawY[8:5];
+
 
 // Instantiation of Axi Bus Interface AXI
 hdmi_text_controller_v1_0_AXI # ( 
@@ -85,8 +99,17 @@ clk_wiz_0 clk_wiz_inst (
         .clk_out2(clk_125MHz),
         .reset(reset_ah),
         .locked(locked),
-        .clk_in1(axi_clk)
+        .clk_in1(axi_aclk)
     );
+vga_controller vga (
+        .pixel_clk(clk_25MHz),
+        .reset(reset_ah),
+        .hs(hsync),
+        .vs(vsync),
+        .active_nblank(vde),
+        .drawX(drawX),
+        .drawY(drawY)
+    );   
 hdmi_tx_0 vga_to_hdmi (
         //Clocking and Reset
         .pix_clk(clk_25MHz),
@@ -108,12 +131,22 @@ hdmi_tx_0 vga_to_hdmi (
         .ade(1'b0),
         
         //Differential outputs
-        .TMDS_CLK_P(hdmi_tmds_clk_p),          
-        .TMDS_CLK_N(hdmi_tmds_clk_n),          
-        .TMDS_DATA_P(hdmi_tmds_data_p),         
-        .TMDS_DATA_N(hdmi_tmds_data_n)          
+        .TMDS_CLK_P(hdmi_clk_p),
+        .TMDS_CLK_N(hdmi_clk_n),
+        .TMDS_DATA_P(hdmi_tx_p),
+        .TMDS_DATA_N(hdmi_tx_n)         
     );
 
+color_mapper color_instance(
+        .BallX(0),
+        .BallY(0),
+        .DrawX(drawX),
+        .DrawY(drawY),
+        .Ball_size(0),
+        .Red(red),
+        .Green(green),
+        .Blue(blue)
+    );
 
 //Instiante clocking wizard, VGA sync generator modules, and VGA-HDMI IP here. For a hint, refer to the provided
 //top-level from the previous lab. You should get the IP to generate a valid HDMI signal (e.g. blue screen or gradient)
