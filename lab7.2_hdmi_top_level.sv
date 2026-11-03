@@ -66,31 +66,31 @@ assign reset_ah = ~axi_aresetn;
 logic [10:0] font_addr;
 logic [7:0] font_data;
 logic [7:0] character_code;
-logic [4:0] FGD_IDX;
-logic [4:0] BKG_IDX;
+logic [3:0] FGD_IDX;
+logic [3:0] BKG_IDX;
 logic [1:0] byte_ind;
-logic [9:0] word_ind;
+logic [10:0] word_ind; //@@ changed to 11bits
 logic [11:0] char_ind;
 logic [31:0] vram;
 logic [31:0] palette[0:7];
 
 assign char_ind = (drawY/16)*80+(drawX/8);
 assign word_ind = char_ind/2;
-assign byte_ind = char_ind[1:0];
+assign byte_ind = char_ind[0];
 
 always_comb begin
     character_code = 7'd0;
     FGD_IDX = 4'd0;
     BKG_IDX = 4'd0;
-    if(byte_ind == 2'd0)
+    if(byte_ind == 1'b0)
     begin
-        character_code = vram [14:8]; //@@changed for 7.2
-        FGD_IDX = vram [7:4];
-        BKG_IDX = vram [3:0];
+        character_code = vram [15:8]; //@@changed for 7.2
+        FGD_IDX =vram[7:4];
+        BKG_IDX =vram[3:0];
     end
-    else if (byte_ind == 2'd1)
+    else
     begin
-        character_code = vram [30:24]; //@@changed for 7.2
+        character_code = vram [31:24]; //@@changed for 7.2
         FGD_IDX = vram [19:16];
         BKG_IDX = vram [23:20];
     end
@@ -177,22 +177,21 @@ hdmi_tx_0 vga_to_hdmi (
         .TMDS_DATA_N(hdmi_tx_n)         
     );
 logic pixel;
-
 assign pixel=font_pix^character_code[7];
 
 always_comb begin
-    if (!pixel) //@@background
+    if (!pixel) //@@ background
     begin
-        red = BKG_IDX%2==0 ? palette[BKG_IDX][27:24] : palette[BKG_IDX][11:8];
-        green = BKG_IDX%2==0 ? palette[BKG_IDX][23:20] : palette[BKG_IDX][7:4];
-        blue = BKG_IDX%2==0 ? palette[BKG_IDX][19:16] : palette[BKG_IDX][3:0];
+        red = BKG_IDX%2==0 ? palette[BKG_IDX/2][11:8]: palette[BKG_IDX/2][27:24];
+        green = BKG_IDX%2==0 ? palette[BKG_IDX/2][7:4]: palette[BKG_IDX/2][23:20];
+        blue= BKG_IDX%2==0 ? palette[BKG_IDX/2][3:0] : palette[BKG_IDX/2][19:16];
     end
-    
-    else //@@foreground
+
+    else //@@ foreground
     begin
-        red = FGD_IDX%2==0 ? palette[FGD_IDX][27:24] : palette[FGD_IDX][11:8];
-        green = FGD_IDX%2==0 ? palette[FGD_IDX][23:20] : palette[FGD_IDX][7:4];
-        blue = FGD_IDX%2==0 ? palette[FGD_IDX][19:16] : palette[FGD_IDX][3:0];
+        red = FGD_IDX%2==0 ? palette[FGD_IDX/2][11:8]: palette[FGD_IDX/2][27:24];
+        green = FGD_IDX%2==0 ? palette[FGD_IDX/2][7:4]: palette[FGD_IDX/2][23:20];
+        blue = FGD_IDX%2==0 ? palette[FGD_IDX/2][3:0]:palette[FGD_IDX/2][19:16];
     end
 end
 
@@ -202,6 +201,7 @@ always_ff @(posedge clk_125MHz or posedge reset_ah)
 begin
     if (reset_ah)
     begin
+        vsync_old <= 1'b0;
         framecount <= 0;
     end
     else
