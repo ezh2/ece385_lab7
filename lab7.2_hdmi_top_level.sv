@@ -55,6 +55,7 @@ module hdmi_text_controller_v1_0 #
 logic clk_25MHz, clk_125MHz, clk, clk_100MHz;
 logic locked;
 logic [9:0] drawX, drawY, ballxsig, ballysig, ballsizesig;
+logic [31:0] framecounter;
 
 logic hsync, vsync, vde;
 logic [3:0] red, green, blue;
@@ -79,9 +80,6 @@ assign word_ind = char_ind/2;
 assign byte_ind = char_ind[0];
 
 always_comb begin
-    character_code = 7'd0;
-    FGD_IDX = 4'd0;
-    BKG_IDX = 4'd0;
     if(byte_ind == 1'b0)
     begin
         character_code = vram [15:8]; //@@changed for 7.2
@@ -91,8 +89,8 @@ always_comb begin
     else
     begin
         character_code = vram [31:24]; //@@changed for 7.2
-        FGD_IDX = vram [19:16];
-        BKG_IDX = vram [23:20];
+        FGD_IDX = vram [23:20];
+        BKG_IDX = vram [19:16];
     end
 end
 logic font_pix;
@@ -109,7 +107,7 @@ hdmi_text_controller_v1_0_AXI # (
     .vram_addr(word_ind),
     .vram_data(vram),
     .palette(palette), //@@ changed color to palette; todo: account for packed
-    .framecount(framecount),
+    .framecount(framecounter),
     .drawX(drawX),
     .drawY(drawY),
     .S_AXI_ACLK(axi_aclk),
@@ -194,22 +192,19 @@ always_comb begin
         blue = FGD_IDX%2==0 ? palette[FGD_IDX/2][3:0]:palette[FGD_IDX/2][19:16];
     end
 end
-
-logic [31:0] framecount;
 logic vsync_old;
 always_ff @(posedge clk_125MHz or posedge reset_ah)
 begin
     if (reset_ah)
     begin
-        vsync_old <= 1'b0;
-        framecount <= 0;
+        framecounter <= 0;
     end
     else
     begin
         vsync_old <= vsync;
         if (vsync_old && !vsync)
         begin
-            framecount <= framecount + 1;
+            framecounter <= framecounter + 1;
         end
     end
 end    
