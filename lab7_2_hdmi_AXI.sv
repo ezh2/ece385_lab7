@@ -434,7 +434,7 @@ begin
     else 
     begin
         case (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]) //@@ modified from old one
-            12'h808: read_nonvram_data = framecount; //@@ checked, hardcore works, so not x808 issue
+            12'h808: read_nonvram_data = framecount; //@@ resolve.. checked, hardcode works, so not x808 issue
             12'h809: read_nonvram_data = drawX;
             12'h80A: read_nonvram_data = drawY;
             default: read_nonvram_data = 32'b0;
