@@ -364,7 +364,7 @@ begin
     begin
         for (int i = 0; i < 4; i++) begin
             if (S_AXI_WSTRB[i])
-                palette[write_word_addr & 2'b11][i*8 +: 8] <= S_AXI_WDATA[i*8 +: 8];
+                palette[write_word_addr[2:0]][i*8 +: 8] <= S_AXI_WDATA[i*8 +: 8];
         end
     end
 end
@@ -421,13 +421,12 @@ end
 // Implement axi_arvalid generation
 // axi_rvalid indicates that valid read data and response are available.
 assign slv_reg_rden = axi_arready && S_AXI_ARVALID;
-logic [31:0] read_nonvram_data; //@@ the extra special things to read outside of vram (601-604)
+logic [31:0] read_nonvram_data; //@@ the read out
 logic read_is_vram;
 logic [31:0] read_response_data;
 always_comb 
 begin
 //@@ accounting for the x800 - x807 range of color palette
-    read_nonvram_data = 32'b0;
     if (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]>= 12'h800 && S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]<= 12'h807)
     begin
         read_nonvram_data =palette[S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]- 12'h800];
@@ -436,8 +435,8 @@ begin
     begin
         case (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]) //@@ modified from old one
             12'h808: read_nonvram_data = framecount;
-            12'h809: read_nonvram_data = {22'b0, drawX};
-            12'h80A: read_nonvram_data = {22'b0, drawY};
+            12'h809: read_nonvram_data = drawX;
+            12'h80A: read_nonvram_data = drawY  ;
             default: read_nonvram_data = 32'b0;
         endcase
     end
@@ -462,20 +461,16 @@ begin
         axi_rresp          <= 2'b00;
     end
     else 
+    //@@ FSM
     begin
         case (read_state)
-
             IDLE: 
             begin
                 axi_rvalid <= 1'b0;
-
                 if (slv_reg_rden) 
                 begin
-                    read_is_vram <=
-                        (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] < 12'h4B0); //@@changed every 'd600 to 'h4B0
-
+                    read_is_vram <= (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] < 12'h4B0); //@@changed every 'd600 to 'h4B0
                     read_response_data <= read_nonvram_data;
-
                     read_state <= READ;
                 end
             end
@@ -484,17 +479,13 @@ begin
             begin
                 read_state <= WAIT_R;
             end
-
             WAIT_R: 
             begin
                 axi_rdata <= read_is_vram ? bram_douta : read_response_data;
-
                 axi_rresp  <= 2'b00; //@@ok
                 axi_rvalid <= 1'b1;
-
                 read_state <= RESPOND; 
             end
-
             RESPOND: 
             begin
                 if (axi_rvalid && S_AXI_RREADY) begin
@@ -502,7 +493,6 @@ begin
                     read_state <= IDLE;
                 end
             end
-
             default: read_state <= IDLE;
         endcase
     end
