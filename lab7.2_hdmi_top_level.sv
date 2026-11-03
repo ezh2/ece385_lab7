@@ -55,7 +55,7 @@ module hdmi_text_controller_v1_0 #
 logic clk_25MHz, clk_125MHz, clk, clk_100MHz;
 logic locked;
 logic [9:0] drawX, drawY, ballxsig, ballysig, ballsizesig;
-logic [31:0] framecounter;
+logic [31:0] framecount;
 
 logic hsync, vsync, vde;
 logic [3:0] red, green, blue;
@@ -107,7 +107,7 @@ hdmi_text_controller_v1_0_AXI # (
     .vram_addr(word_ind),
     .vram_data(vram),
     .palette(palette), //@@ changed color to palette; todo: account for packed
-    .framecount(framecounter),
+    .framecount(framecount),
     .drawX(drawX),
     .drawY(drawY),
     .S_AXI_ACLK(axi_aclk),
@@ -193,31 +193,22 @@ always_comb begin
     end
 end
 logic vsync_old;
+
 always_ff @(posedge clk_125MHz or posedge reset_ah)
 begin
     if (reset_ah)
     begin
-        framecounter <= 0;
+        framecount <= 32'd0;
+        vsync_old <= 1'b0;
     end
     else
     begin
         vsync_old <= vsync;
         if (vsync_old && !vsync)
-        begin
-            framecounter <= framecounter + 1;
-        end
+            framecount <= framecount + 1'b1;
     end
 end    
-//color_mapper color_instance(
-//        .BallX(0),
-//        .BallY(0),
-//        .DrawX(drawX),
-//        .DrawY(drawY),
-//        .Ball_size(0),
-//        .Red(red),
-//        .Green(green),
-//        .Blue(blue)
-//    );
+
 font_rom font_rom_inst (
     .addr(font_addr),
     .data(font_data)
