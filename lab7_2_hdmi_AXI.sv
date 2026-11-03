@@ -102,9 +102,10 @@ module hdmi_text_controller_v1_0_AXI #
         // accept the read data and response information.
     input logic  S_AXI_RREADY,
     
-    input  logic [9:0]  vram_addr,
+    input  logic [10:0]  vram_addr,
     output logic [31:0] vram_data,
-    output logic [31:0] color,
+    //output logic [31:0] color,
+    output logic [31:0] palette [0:7],
     input logic  [31:0] framecount,
     input logic  [9:0] drawX,
     input logic  [9:0] drawY
@@ -113,17 +114,17 @@ module hdmi_text_controller_v1_0_AXI #
 //@@ Port A is AXI; Port B is colormapper
 logic [3:0]  bram_wea;
 // @@ addr are now 12 bits long
-logic [11:0] bram_addra;
+logic [10:0] bram_addra;
 logic [31:0] bram_douta;
 logic [11:0] write_word_addr;
 logic [11:0] read_word_addr;
-logic [31:0] color_reg;
+//logic [31:0] color_reg;
 logic        write_ok;
 logic        read_ok;
 
-assign color = color_reg;
+//assign color = color_reg; //@@no longer need in 7.2, we using palette no
 
-//@@ calc write& read word addr (took from 7.1)
+//@@ calc write& read word addr
 assign write_word_addr = axi_awaddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB];
 assign read_word_addr  = axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB];
 
@@ -153,15 +154,14 @@ always_comb begin
     if (read_state != IDLE)
         bram_addra = read_word_addr;
     else if (axi_arready && S_AXI_ARVALID)
-        bram_addra =
-            S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB];
+        bram_addra =S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB];
     else
         bram_addra = write_word_addr;
 end
 
 //@@ Generate BRAM byte-write enables
 always_comb begin
-    if (S_AXI_ARESETN && slv_reg_wren && (write_word_addr < 10'h4B0)) 
+    if (S_AXI_ARESETN && slv_reg_wren && (write_word_addr < 12'h4B0)) 
     begin
         bram_wea = S_AXI_WSTRB;
     end
@@ -176,7 +176,7 @@ blk_mem_gen_0 vram_bram (
     .clka  (S_AXI_ACLK),
     .ena   (1'b1),
     .wea   (bram_wea),
-    .addra (bram_addra),
+    .addra (bram_addra[11:0]),
     .dina  (S_AXI_WDATA),
     .douta (bram_douta),
 
@@ -338,15 +338,33 @@ end
 // and the slave is ready to accept the write address and write data.
 assign slv_reg_wren = axi_wready && S_AXI_WVALID && axi_awready && S_AXI_AWVALID;
 
-//@@ reset color register instead of the whole slv_reg here
-always_ff @(posedge S_AXI_ACLK) begin
-    if (S_AXI_ARESETN == 1'b0) begin
-        color_reg <= 32'b0;
-    end else if (slv_reg_wren && write_word_addr == 10'h4B0) 
+//@@ reset color register instead of the whole slv_reg here, these need changes too
+//always_ff @(posedge S_AXI_ACLK) begin
+//    if (S_AXI_ARESETN == 1'b0) begin
+//        color_reg <= 32'b0;
+//    end else if (slv_reg_wren && write_word_addr == 12'h4B0) 
+//    begin
+//        for (int i = 0; i < 4; i++) begin
+//            if (S_AXI_WSTRB[i])
+//                color_reg[i*8 +: 8] <= S_AXI_WDATA[i*8 +: 8];
+//        end
+//    end
+//end
+//@@ above modified to work with week 1, but week 2 needs revision, shown below:
+always_ff @(posedge S_AXI_ACLK)
+begin
+    if (S_AXI_ARESETN == 1'b0) 
+    begin
+        for (int i=0; i<8;i++)
+        begin
+            palette[i] <= 32'b0;
+        end
+    end 
+    else if (slv_reg_wren && write_word_addr >= 12'h800 && write_word_addr <= 12'h807) //@check inrange
     begin
         for (int i = 0; i < 4; i++) begin
             if (S_AXI_WSTRB[i])
-                color_reg[i*8 +: 8] <= S_AXI_WDATA[i*8 +: 8];
+                palette[write_word_addr & 2'b11][i*8 +: 8] <= S_AXI_WDATA[i*8 +: 8];
         end
     end
 end
@@ -406,15 +424,30 @@ assign slv_reg_rden = axi_arready && S_AXI_ARVALID;
 logic [31:0] read_nonvram_data; //@@ the extra special things to read outside of vram (601-604)
 logic read_is_vram;
 logic [31:0] read_response_data;
-always_comb begin
-    case (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB])
-        10'h800: read_nonvram_data = color_reg;
-        10'h808: read_nonvram_data = framecount;
-        10'h809: read_nonvram_data = {22'b0, drawX};
-        10'h80A: read_nonvram_data = {22'b0, drawY};
-        default: read_nonvram_data = 32'b0;
-    endcase
+always_comb 
+begin
+//@@ accounting for the x800 - x807 range of color palette
+    read_nonvram_data = 32'b0;
+    if (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]>= 12'h800 && S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]<= 12'h807)
+    begin
+        read_nonvram_data =palette[S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]- 12'h800];
+    end
+    else 
+    begin
+        case (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]) //@@ modified from old one
+            12'h808: read_nonvram_data = framecount;
+            12'h809: read_nonvram_data = {22'b0, drawX};
+            12'h80A: read_nonvram_data = {22'b0, drawY};
+            default: read_nonvram_data = 32'b0;
+        endcase
+    end
 end
+//always_comb begin
+//    case (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB])
+//        10'h800: read_nonvram_data = color_reg;
+//        default: read_nonvram_data = 32'b0;
+//    endcase
+//end
 
 // Output register or memory read data
 always_ff @(posedge S_AXI_ACLK) 
@@ -439,7 +472,7 @@ begin
                 if (slv_reg_rden) 
                 begin
                     read_is_vram <=
-                        (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] < 10'h4B0); //@@changed every 'd600 to 'h4B0
+                        (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] < 12'h4B0); //@@changed every 'd600 to 'h4B0
 
                     read_response_data <= read_nonvram_data;
 
