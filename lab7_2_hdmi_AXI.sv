@@ -176,7 +176,7 @@ blk_mem_gen_0 vram_bram (
     .clka  (S_AXI_ACLK),
     .ena   (1'b1),
     .wea   (bram_wea),
-    .addra (bram_addra[11:0]),
+    .addra (bram_addra[10:0]),
     .dina  (S_AXI_WDATA),
     .douta (bram_douta),
 
