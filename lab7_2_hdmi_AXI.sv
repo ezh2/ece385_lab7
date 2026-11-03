@@ -112,10 +112,11 @@ module hdmi_text_controller_v1_0_AXI #
 
 //@@ Port A is AXI; Port B is colormapper
 logic [3:0]  bram_wea;
-logic [9:0]  bram_addra;
+// @@ addr are now 12 bits long
+logic [11:0] bram_addra;
 logic [31:0] bram_douta;
-logic [9:0]  write_word_addr;
-logic [9:0]  read_word_addr;
+logic [11:0] write_word_addr;
+logic [11:0] read_word_addr;
 logic [31:0] color_reg;
 logic        write_ok;
 logic        read_ok;
@@ -160,7 +161,7 @@ end
 
 //@@ Generate BRAM byte-write enables
 always_comb begin
-    if (S_AXI_ARESETN && slv_reg_wren && (write_word_addr < 10'd600)) 
+    if (S_AXI_ARESETN && slv_reg_wren && (write_word_addr < 10'h4B0)) 
     begin
         bram_wea = S_AXI_WSTRB;
     end
@@ -217,7 +218,7 @@ read_state_t read_state;
 // ADDR_LSB = 2 for 32 bits (n downto 2)
 // ADDR_LSB = 3 for 64 bits (n downto 3)
 localparam integer ADDR_LSB = (C_S_AXI_DATA_WIDTH/32) + 1;
-localparam integer OPT_MEM_ADDR_BITS = 9;
+localparam integer OPT_MEM_ADDR_BITS = 11;
 //----------------------------------------------
 //-- Signals for user logic register space example
 //------------------------------------------------
@@ -341,7 +342,7 @@ assign slv_reg_wren = axi_wready && S_AXI_WVALID && axi_awready && S_AXI_AWVALID
 always_ff @(posedge S_AXI_ACLK) begin
     if (S_AXI_ARESETN == 1'b0) begin
         color_reg <= 32'b0;
-    end else if (slv_reg_wren && write_word_addr == 10'd600) 
+    end else if (slv_reg_wren && write_word_addr == 10'h4B0) 
     begin
         for (int i = 0; i < 4; i++) begin
             if (S_AXI_WSTRB[i])
@@ -407,10 +408,10 @@ logic read_is_vram;
 logic [31:0] read_response_data;
 always_comb begin
     case (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB])
-        10'd600: read_nonvram_data = color_reg;
-        10'd601: read_nonvram_data = framecount;
-        10'd602: read_nonvram_data = {22'b0, drawX};
-        10'd603: read_nonvram_data = {22'b0, drawY};
+        10'h800: read_nonvram_data = color_reg;
+        10'h808: read_nonvram_data = framecount;
+        10'h809: read_nonvram_data = {22'b0, drawX};
+        10'h80A: read_nonvram_data = {22'b0, drawY};
         default: read_nonvram_data = 32'b0;
     endcase
 end
@@ -438,7 +439,7 @@ begin
                 if (slv_reg_rden) 
                 begin
                     read_is_vram <=
-                        (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] < 10'd600);
+                        (S_AXI_ARADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] < 10'h4B0); //@@changed every 'd600 to 'h4B0
 
                     read_response_data <= read_nonvram_data;
 
